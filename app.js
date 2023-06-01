@@ -38,21 +38,22 @@ async function matchKaro(password, salt, oldhash) {
 }
 
 function authenticate(req,res,next) {
-  const cookie = req.headers.cookie.slice(10);
-  console.log("cookie: ", cookie)
+  req.adminAuth = 0;
+  const sessionId = req.headers.cookie.slice(10);
+  console.log(sessionId)
   if (req.headers.cookie.includes("sessionID")){
     db.query(
-      `SELECT id, sessionId, admin FROM users WHERE sessionId=${db.escape(cookie)}`, (err,result) =>{
+      `SELECT cookies.userId, cookies.sessionId, users.admin FROM cookies, users WHERE sessionId=${db.escape(sessionId)} AND users.id=cookies.userid;`, (err,result) =>{
         if (err) throw err;
-        console.log("sessionID: ",result[0].sessionId)
-        req.admin = result[0].admin
-  
-        if (cookie===result[0].sessionId){
-          req.user = result[0].id;
+        console.log(result)
+        req.body.admin = result[0].admin;
+
+        if (sessionId===result[0].sessionId){
+          req.body.userId = result[0].userId;
           next();
-        }
-        else{
-            res.status(403).send({ 'msg': 'Not Authenticated'});
+        } else {
+            console.log("cookie: ", sessionId)
+            res.status(403).send({ 'msg': 'Not authenticated'});
         }
       }
     )
@@ -65,24 +66,26 @@ function authenticate(req,res,next) {
 app.post('/register', async (req, res) => {
   const username = req.body.username
   const password = req.body.password
+  var userId;
   var [hash, salt] = await hashKaro(password)
 
-  db.query(
-    `SELECT * FROM users WHERE username = ${db.escape(username)}`,
-    (err, result) => {
-      if (result.length!=0){
-        res.status(403).send({ msg: 'Username already exists' })
-      }
-      else {
-        db.query(`INSERT INTO users (username, hash, salt, admin) VALUES (${db.escape(username)}, ${db.escape(hash)}, ${db.escape(salt)}, 0)`, (err, result) => {
-          if (err) {
-            console.error('error during user registration:', err)
-          } else {
-            console.log('user registered successfully')
-            return res.status(200).json({ message: 'registration successful' })
-          }
+  db.query(`SELECT * FROM users WHERE username = ${db.escape(username)}`, (err, result) => {
+      if (result.length!=0) return res.status(403).send({ msg: 'Username already exists' })
+
+      db.query(`INSERT INTO users (username, hash, salt, admin) VALUES (${db.escape(username)}, ${db.escape(hash)}, ${db.escape(salt)}, 0)`, (err, result) => {
+        if (err) console.error('error during user registration:', err)
+      })
+
+      db.query(`SELECT id from users WHERE username=${db.escape(username)}`, (err, result) => {
+        if (err) return console.error('error during user registration:', err)
+        userId = result[0].id;
+        db.query(`INSERT INTO cookies (userId) VALUES (${userId})`, (err, result) => {
+          if (err) return console.error('error during user registration:', err)
+  
+          console.log('user registered successfully')
+          return res.status(200).json({ message: 'registration successful' })
         })
-      }
+      })
     }
   )
 
@@ -103,16 +106,16 @@ app.post('/login', (req, res) => {
         return res.status(403).send({ msg: 'invalid username or password' })
       }
 
-      const newSessionID = crypto.randomUUID()
+      const newSessionId = crypto.randomUUID()
 
       db.query(
-        `UPDATE users SET sessionID = ${db.escape(newSessionID)} WHERE id = ${db.escape(result[0].id)}`,
+        `UPDATE cookies SET sessionId = ${db.escape(newSessionId)} WHERE id = ${db.escape(result[0].id)}`,
         (err) => {
           if (err) {
             console.error(err)
           }
 
-          res.cookie('sessionID', newSessionID, { httpOnly: true }).status(200).send({ msg: 'login successful' })
+          res.cookie('sessionID', newSessionId, { httpOnly: true }).status(200).send({ msg: 'login successful' })
         }
       )
     }
@@ -152,8 +155,7 @@ app.post('/return-book', authenticate, (req, res) => {
   const bookId = req.body.bookId
   const userId = req.body.userId
 
-  db.query(
-    `SELECT * from books WHERE id=${bookId} AND userId=${userId} AND state=\'owned\'`, (err, results) => {
+  db.query(`SELECT * from books WHERE id=${bookId} AND userId=${userId} AND state=\'owned\'`, (err, results) => {
       if (err) throw err
       if (results.length == 0)  return res.send('book does not exist or is not owned by the user')
 
@@ -171,6 +173,8 @@ app.post('/return-book', authenticate, (req, res) => {
 
 app.post('/approve-checkout', authenticate, (req, res) => {
   const bookId = req.body.bookId
+  const admin = req.body.admin
+  if (!admin) return res.status(403).send({ 'msg': 'Not authenticated'});
   db.query(
     `UPDATE books SET state = \'owned\' WHERE id = ${bookId}`, (err, results) => {
       if (err) throw err
@@ -181,6 +185,8 @@ app.post('/approve-checkout', authenticate, (req, res) => {
 
 app.post('/deny-checkout', authenticate, (req, res) => {
   const bookId = req.body.bookId
+  const admin = req.body.admin
+  if (!admin) return res.status(403).send({ 'msg': 'Not authenticated'});
   db.query(
     `UPDATE books SET state = \'available\' WHERE id = ${bookId}`, (err, results) => {
       if (err) throw err

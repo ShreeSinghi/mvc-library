@@ -11,8 +11,7 @@ CREATE TABLE users (
   username VARCHAR(255) NOT NULL,
   `hash` VARCHAR(255) NOT NULL,
   salt VARCHAR(255) NOT NULL,
-  `admin` INT(1) NOT NULL,
-  sessionId VARCHAR(255)
+  `admin` INT(1) NOT NULL
 );
 
 CREATE TABLE books (
@@ -25,7 +24,7 @@ CREATE TABLE books (
 
 CREATE TABLE cookies (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  userid INT NOT NULL,
-  FOREIGN KEY (sessionId) REFERENCES users(sessionId),
+  userId INT,
+  sessionId VARCHAR(255),
   FOREIGN KEY (userId) REFERENCES users(id)
 );
