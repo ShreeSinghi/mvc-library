@@ -17,14 +17,15 @@ CREATE TABLE users (
 
 CREATE TABLE books (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  title VARCHAR(255) NOT NULL
-  FOREIGN KEY (userid) REFERENCES users(id)
+  title VARCHAR(255) NOT NULL,
+  userId INT,
+  FOREIGN KEY (userId) REFERENCES users(id),
   `state` ENUM('owned', 'available', 'requested') DEFAULT 'available'
 );
 
-CREATE TABLE cookies (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  userid INT NOT NULL,
-  FOREIGN KEY (sessionId) REFERENCES users(sessionId),
-  FOREIGN KEY (userId) REFERENCES users(id)
-);
+-- CREATE TABLE cookies (
+--   id INT AUTO_INCREMENT PRIMARY KEY,
+--   userid INT NOT NULL,
+--   FOREIGN KEY (sessionId) REFERENCES users(sessionId),
+--   FOREIGN KEY (userId) REFERENCES users(id)
+-- );
