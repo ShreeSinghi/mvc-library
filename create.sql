@@ -23,9 +23,9 @@ CREATE TABLE books (
   `state` ENUM('owned', 'available', 'requested') DEFAULT 'available'
 );
 
--- CREATE TABLE cookies (
---   id INT AUTO_INCREMENT PRIMARY KEY,
---   userid INT NOT NULL,
---   FOREIGN KEY (sessionId) REFERENCES users(sessionId),
---   FOREIGN KEY (userId) REFERENCES users(id)
--- );
+CREATE TABLE cookies (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  userid INT NOT NULL,
+  FOREIGN KEY (sessionId) REFERENCES users(sessionId),
+  FOREIGN KEY (userId) REFERENCES users(id)
+);
