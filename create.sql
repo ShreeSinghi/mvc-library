@@ -12,26 +12,19 @@ CREATE TABLE users (
   `hash` VARCHAR(255) NOT NULL,
   salt VARCHAR(255) NOT NULL,
   `admin` INT(1) NOT NULL,
-  sessionID VARCHAR(255)
+  sessionId VARCHAR(255)
 );
 
 CREATE TABLE books (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(255) NOT NULL
-);
-
-CREATE TABLE requests (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  bookId INT NOT NULL,
-  userId INT NOT NULL,
-  `status` ENUM('pending', 'approved', 'denied') DEFAULT 'pending',
-  FOREIGN KEY (bookId) REFERENCES books(id),
-  FOREIGN KEY (userId) REFERENCES users(id)
+  FOREIGN KEY (userid) REFERENCES users(id)
+  `state` ENUM('owned', 'available', 'requested') DEFAULT 'available'
 );
 
 CREATE TABLE cookies (
   id INT AUTO_INCREMENT PRIMARY KEY,
   userid INT NOT NULL,
-  sessionid VARCHAR(255) NOT NULL,
-  FOREIGN KEY (userid) REFERENCES users(id)
+  FOREIGN KEY (sessionId) REFERENCES users(sessionId),
+  FOREIGN KEY (userId) REFERENCES users(id)
 );
