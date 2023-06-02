@@ -18,9 +18,7 @@ CREATE TABLE users (
 CREATE TABLE books (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
-  quantity INT NOT NULL DEFAULT 0,
-  userId INT,
-  FOREIGN KEY (userId) REFERENCES users(id)
+  quantity INT NOT NULL DEFAULT 1
 );
 
 
@@ -35,7 +33,7 @@ CREATE TABLE requests (
   id INT AUTO_INCREMENT PRIMARY KEY,
   bookId INT,
   userId INT,
-  state ENUM('owned', 'requested') DEFAULT 'requested',
+  `state` ENUM('owned', 'requested') DEFAULT 'requested',
   FOREIGN KEY (bookId) REFERENCES books(id),
   FOREIGN KEY (userId) REFERENCES users(id)
 );

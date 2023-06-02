@@ -4,6 +4,8 @@ const bcrypt = require('bcrypt')
 const mysql = require('mysql')
 const crypto = require('crypto')
 const app = express()
+const request = require('request');
+
 app.use(express.json())
 
 app.listen(3000, () => {
@@ -40,12 +42,10 @@ async function matchKaro(password, salt, oldhash) {
 function authenticate(req,res,next) {
   req.adminAuth = 0;
   const sessionId = req.headers.cookie.slice(10);
-  console.log(sessionId)
   if (req.headers.cookie.includes("sessionID")){
     db.query(
       `SELECT cookies.userId, cookies.sessionId, users.admin FROM cookies, users WHERE sessionId=${db.escape(sessionId)} AND users.id=cookies.userid;`, (err,result) =>{
         if (err) throw err;
-        console.log(result)
         req.body.admin = result[0].admin;
 
         if (sessionId===result[0].sessionId){
@@ -130,70 +130,111 @@ app.get('/books', (req, res) => {
 })
 
 app.post('/request-checkout', authenticate, (req, res) => {
-  const bookId = req.body.bookId
-  const userId = req.body.userId
+  const bookId = req.body.bookId;
+  const userId = req.body.userId;
 
-  db.query(
-    `SELECT * from books WHERE id=${bookId}`, (err, results) => {
-      if (err) throw err
-      if (results.length == 0)  return res.send('Book does not exist')
-      if (results[0].state != "available") return res.send('Book unavailable')
+  db.query(`SELECT * FROM books WHERE id=${bookId}`, (err, results) => {
+    if (err) throw err;
+    if (results.length === 0) return res.send('Book does not exist');
+    if (results[0].quantity === 0) return res.send('Book is out of stock');
 
-      db.query(
-        `UPDATE books SET userId = ${userId}, state = \'requested\' WHERE id = ${bookId}`,(err, results) => {
-          if (err) throw err
-          res.send('Checkout request submitted')
+    db.query(
+      `SELECT * FROM requests WHERE bookId=${bookId} AND userId=${userId} AND state='requested'`,
+      (err, results) => {
+        if (err) throw err;
+        if (results.length > 0) return res.send('You have already requested this book');
+
+        db.query(
+          `INSERT INTO requests (bookId, userId, state) VALUES (${bookId}, ${userId}, 'requested')`,
+          (err, results) => {
+            if (err) throw err;
+            res.send('Checkout request submitted');
+          }
+        );
+        db.query(`UPDATE books SET quantity = quantity - 1 WHERE id = ${bookId}`,
+        (err, results) => {
+          if (err) throw err;
         }
-      )
-
-    }
-  )
-
-})
+      );
+      }
+    );
+  });
+});
 
 app.post('/return-book', authenticate, (req, res) => {
-  const bookId = req.body.bookId
-  const userId = req.body.userId
+  const bookId = req.body.bookId;
+  const userId = req.body.userId;
 
-  db.query(`SELECT * from books WHERE id=${bookId} AND userId=${userId} AND state=\'owned\'`, (err, results) => {
-      if (err) throw err
-      if (results.length == 0)  return res.send('book does not exist or is not owned by the user')
+  db.query(
+    `SELECT * FROM requests WHERE bookId=${bookId} AND userId=${userId} AND state='owned'`,
+    (err, results) => {
+      if (err) throw err;
 
-      db.query(
-        `UPDATE books SET state = \'available\' WHERE id = ${bookId}`,(err, results) => {
-          if (err) throw err
-          res.send('Book returned')
+      console.log(results)
+
+      if (results.length === 0) {
+        return res.send('Book does not exist or is not owned by the user');
+      }
+
+      const requestId = results[0].id;
+
+      db.query(`DELETE FROM requests WHERE id=${requestId}`, (err, results) => {
+          if (err) throw err;
+
+          db.query(
+            `UPDATE books SET quantity = quantity + 1 WHERE id=${bookId}`,
+            (err, results) => {
+              if (err) throw err;
+
+              res.send('Book returned');
+            }
+          );
         }
-      )
-
+      );
     }
-  )
-
-})
+  );
+});
 
 app.post('/approve-checkout', authenticate, (req, res) => {
-  const bookId = req.body.bookId
-  const admin = req.body.admin
-  if (!admin) return res.status(403).send({ 'msg': 'Not authenticated'});
+  const requestIds = req.body.requestIds;
+  const admin = req.body.admin;
+
+  if (!admin) return res.status(403).send({ msg: 'Not authenticated' });
+  console.log(`UPDATE requests SET state='owned' WHERE id IN (${requestIds.join(',')})`)
   db.query(
-    `UPDATE books SET state = \'owned\' WHERE id = ${bookId}`, (err, results) => {
-      if (err) throw err
-      res.send('Checkout request approved')
+    `UPDATE requests SET state='owned' WHERE id IN (${requestIds.join(',')})`,
+    (err, results) => {
+      if (err) throw err;
+      if (results.length > 0) return res.send('Checkout approved')
+      return res.send('Request does not exist');
     }
-  )
-})
+  );
+});
+
 
 app.post('/deny-checkout', authenticate, (req, res) => {
-  const bookId = req.body.bookId
-  const admin = req.body.admin
-  if (!admin) return res.status(403).send({ 'msg': 'Not authenticated'})
+  const requestIds = req.body.requestIds;
+  const admin = req.body.admin;
+
+  if (!admin) return res.status(403).send({ msg: 'Not authenticated' });
+
+
   db.query(
-    `UPDATE books SET state = \'available\' WHERE id = ${bookId}`, (err, results) => {
-      if (err) throw err
-      res.send('Checkout request denied')
+    `UPDATE requests SET state='denied' WHERE id IN (${requestIds.join(',')})`,
+    (err, results) => {
+      if (err) throw err;
+
+      db.query(
+        `UPDATE books SET quantity = quantity + 1 WHERE id IN (SELECT bookId FROM requests WHERE id IN (${requestIds.join(',')}))`,
+        (err, results) => {
+          if (err) throw err;
+
+          res.send('Checkout request denied');
+        }
+      );
     }
-  )
-})
+  );
+});
 
 app.post('/request-admin', authenticate, (req, res) => {
   const userId = req.body.userId;
@@ -221,7 +262,7 @@ app.post('/approve-admin', authenticate, (req, res) => {
 
       if (results.length === 0) return res.status(404).send({ msg: 'Admin request not found' })
 
-
+    
       db.query(
         `UPDATE users SET admin = true, requested = false WHERE id = ${approvalUserId}`,
         (err, results) => {
@@ -256,3 +297,33 @@ app.post('/deny-admin', authenticate, (req, res) => {
     }
   );
 });
+
+db.query(`SELECT * FROM users WHERE username = 'admin' AND admin = true;`, (err, results) => {
+  if (results.length!=0) return;
+
+  request.post(
+      'http://localhost:3000/register',
+      { json: { username: 'admin', password:'admin'} },
+      () => {
+        db.query(
+          `UPDATE users SET admin = true WHERE username = \'admin\'`,
+          (err, results) => {
+            if (err) throw err;
+          }
+        );
+      }
+  );
+
+
+})
+
+db.query(`SELECT * FROM users WHERE username = \'shree\';`, (err, results) => {
+  if (results.length!=0) return;
+
+  request.post(
+      'http://localhost:3000/register',
+      { json: { username: 'shree', password:'aloo'} },
+      () => {}
+  );
+
+})
