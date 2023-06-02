@@ -186,7 +186,7 @@ app.post('/approve-checkout', authenticate, (req, res) => {
 app.post('/deny-checkout', authenticate, (req, res) => {
   const bookId = req.body.bookId
   const admin = req.body.admin
-  if (!admin) return res.status(403).send({ 'msg': 'Not authenticated'});
+  if (!admin) return res.status(403).send({ 'msg': 'Not authenticated'})
   db.query(
     `UPDATE books SET state = \'available\' WHERE id = ${bookId}`, (err, results) => {
       if (err) throw err
@@ -194,3 +194,65 @@ app.post('/deny-checkout', authenticate, (req, res) => {
     }
   )
 })
+
+app.post('/request-admin', authenticate, (req, res) => {
+  const userId = req.body.userId;
+
+  if (req.body.admin) return res.status(403).send({ msg: 'User is already an admin' })
+
+  db.query(
+    `UPDATE users SET requested = true WHERE id = ${userId}`,
+    (err, results) => {
+      if (err) throw err;
+      res.send('Admin request submitted');
+    }
+  );
+});
+
+app.post('/approve-admin', authenticate, (req, res) => {
+  const admin = req.body.admin
+  const approvalUserId = req.body.approvalUserId
+
+  if (!admin) return res.status(403).send({ msg: 'Not authenticated' })
+
+  db.query(
+    `SELECT * FROM users WHERE id = ${approvalUserId} AND requested = true`, (err, results) => {
+      if (err) throw err;
+
+      if (results.length === 0) return res.status(404).send({ msg: 'Admin request not found' })
+
+
+      db.query(
+        `UPDATE users SET admin = true, requested = false WHERE id = ${approvalUserId}`,
+        (err, results) => {
+          if (err) throw err;
+          res.send('Admin request approved')
+        }
+      );
+    }
+  );
+});
+
+app.post('/deny-admin', authenticate, (req, res) => {
+  const denialUserId = req.body.denialUserId;
+  const admin = req.body.admin;
+
+  if (!admin) return res.status(403).send({ msg: 'Not authenticated' })
+
+  db.query(
+    `SELECT * FROM users WHERE id = ${denialUserId} AND requested = true`,
+    (err, results) => {
+      if (err) throw err;
+
+      if (results.length === 0) return res.status(404).send({ msg: 'Admin request not found' })
+
+      db.query(
+        `UPDATE users SET requested = false WHERE id = ${denialUserId}`,
+        (err, results) => {
+          if (err) throw err;
+          res.send('Admin request denied');
+        }
+      );
+    }
+  );
+});
