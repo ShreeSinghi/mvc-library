@@ -32,6 +32,7 @@ CREATE TABLE cookies (
 CREATE TABLE requests (
   id INT AUTO_INCREMENT PRIMARY KEY,
   bookId INT,
+  title VARCHAR(255),
   userId INT,
   `state` ENUM('owned', 'requested') DEFAULT 'requested',
   FOREIGN KEY (bookId) REFERENCES books(id),

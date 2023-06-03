@@ -4,7 +4,7 @@ const bcrypt = require('bcrypt')
 const mysql = require('mysql')
 const crypto = require('crypto')
 const bodyParser = require('body-parser')
-const path = require('path');
+const path = require('path')
 const request = require('request')
 
 const app = express()
@@ -12,9 +12,9 @@ const app = express()
 
 app.use(express.json())
 app.use(bodyParser())
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'ejs');
-app.use(express.static(path.join(__dirname, 'public')));
+app.set('views', path.join(__dirname, 'views'))
+app.set('view engine', 'ejs')
+app.use(express.static(path.join(__dirname, 'public')))
 
 app.listen(3000, () => {
   console.log('Server is running on port 3000')
@@ -48,7 +48,8 @@ async function matchKaro(password, salt, oldhash) {
 }
 
 function authenticate(req,res,next) {
-  const sessionId = req.headers.cookie.slice(10)
+  const cookie = req.headers.cookie
+  const sessionId = cookie.slice(cookie.indexOf("sessionID=") + 10)
   if (req.headers.cookie.includes("sessionID")){
     db.query(
       `SELECT cookies.userId, cookies.sessionId, users.admin FROM cookies, users WHERE sessionId=${db.escape(sessionId)} AND users.id=cookies.userid`, (err,result) =>{
@@ -70,20 +71,84 @@ function authenticate(req,res,next) {
   }
 }
 
+function getDataUser(userId, checkoutStatus){
+  return new Promise((resolve, reject) => {
+
+    db.query('SELECT * FROM books', (err, booksresult) => {
+      if (err) throw err
+  
+      db.query(`SELECT * FROM requests WHERE userId=${userId}`, (err, requestsresult) => {
+        if (err) throw err
+  
+        db.query(`SELECT * FROM users WHERE id=${userId}`, (err, userresult) => {
+          if (err) throw err
+          ownedbooks = []
+          booksresult.forEach(book => {
+            if (book.userId == userId){
+              ownedbooks.push()
+            }
+          })
+          resolve({
+            books: booksresult,
+            isadminrequested: userresult[0].requested,
+            requests: requestsresult,
+            ownedbooks: ownedbooks,
+            checkoutStatus: checkoutStatus
+          })
+        })
+      })
+    })
+  })
+}
+
+function getDataAdmin(){
+  return new Promise((resolve, reject) => {
+    db.query(`SELECT * FROM requests WHERE state = 'requested'`, (err, requestsResult) => {
+      if (err) throw err
+    
+      db.query(`SELECT * FROM books`, (err, booksResult) => {
+        if (err) throw err
+    
+        var requestList = []
+    
+        requestsResult.forEach((request) => {    
+          const book = booksResult.find((book) => book.id === request.bookId)
+    
+          const title = book.title
+          const requestWithBookTitle = { ...request, title }
+          requestList.push(requestWithBookTitle)
+        })
+    
+        db.query(`SELECT * FROM users WHERE requested = true`, (err, usersResult) => {
+          if (err) throw err
+    
+          resolve({
+            books: requestList,
+            users: usersResult,
+          })
+        })
+      })
+    })
+  })
+}
+
 app.get('/register', (req, res) => {
-  res.render('register', {error:''});
-});
+  res.render('register', {error:''})
+})
 
 app.get('/login', (req, res) => {
-  res.render('login', {error:''});
-});
+  res.render('login', {error:''})
+})
 
-app.get('/books', (req, res) => {
-  db.query('SELECT * FROM books', (err, results) => {
-    if (err) throw err;
-    res.render('books', { books: results });
-  });
-});
+
+app.get('/home', authenticate, async (req, res) => {
+  const userId = req.body.userId
+  res.render('home', await getDataUser(userId, ''))
+})
+
+app.get('/home-admin', authenticate, async (req, res) => {
+  res.render('home-admin', await getDataAdmin())
+})
 
 app.post('/register', async (req, res) => {
   const username = req.body.username
@@ -136,7 +201,7 @@ app.post('/login', (req, res) => {
         (err, results) => {
           if (err) return console.error(err)
 
-          res.cookie('sessionID', newSessionId, { httpOnly: true }).redirect('')
+          res.cookie('sessionID', newSessionId, { httpOnly: true }).redirect('home')
         }
       )
     }
@@ -144,67 +209,53 @@ app.post('/login', (req, res) => {
 })
 
 app.post('/add-book', authenticate, (req, res) => {
-  const title = req.body.title;
-  const quantity = req.body.quantity;
+  const title = req.body.title
+  const quantity = req.body.quantity
+  console.log('hi')
 
   db.query(`SELECT * FROM books WHERE title = ${db.escape(title)}`, (err, results) => {
-    if (err) throw err;
+    if (err) throw err
 
     if (results.length === 0) {
       db.query(`INSERT INTO books (title, quantity) VALUES (${db.escape(title)}, ${quantity})`, (err, result) => {
-        if (err) throw err;
+        if (err) throw err
       })
     } else {
       db.query(`UPDATE books SET quantity = ${results[0].quantity + quantity} WHERE title = ${db.escape(title)}`, (err, result) => {
-        if (err) throw err;
+        if (err) throw err
       })
       res.send('Books added')
     }
-  });
-});
+  })
+})
 
 app.post('/request-checkout', authenticate, (req, res) => {
   const bookId = req.body.bookId
   const userId = req.body.userId
 
-  db.query(`SELECT * FROM books WHERE id=${bookId}`, (err, results) => {
+  db.query(`SELECT * FROM books WHERE id=${bookId}`, async (err, results) => {
     if (err) throw err
-    if (results.length === 0) return res.send('Book does not exist')
-    if (results[0].quantity === 0) return res.send('Book is out of stock')
+    if (results.length === 0) res.send(await getDataUser(userId, 'Book does not exist'))
+    if (results[0].quantity === 0) res.send(await getDataUser(userId, 'Book is out of stock'))
 
-    db.query(`SELECT * FROM requests WHERE bookId=${bookId} AND userId=${userId} AND state='requested'`, (err, results) => {
+    db.query(`SELECT * FROM requests WHERE bookId=${bookId} AND userId=${userId} AND state='requested'`,
+      async (err, results) => {
         if (err) throw err
-        if (results.length > 0) return res.send('You have already requested this book')
+        if (results.length > 0) return res.send(await getDataUser(userId, 'You have already requested this book'))
 
-        db.query(`INSERT INTO requests (bookId, userId, state) VALUES (${bookId}, ${userId}, 'requested')`, (err, results) => {
+        db.query(`INSERT INTO requests (bookId, userId, state) VALUES (${bookId}, ${userId}, 'requested')`,
+        async (err, results) => {
             if (err) throw err
-            res.send('Checkout request submitted')
+            res.send(await getDataUser(userId, 'Checkout request submitted'))
           }
         )
-        db.query(`UPDATE books SET quantity = quantity - 1 WHERE id = ${bookId}`,
-        (err, results) => {
+
+        db.query(`UPDATE books SET quantity = quantity - 1 WHERE id = ${bookId}`, (err, results) => {
           if (err) throw err
-        }
-      )
+        })
       }
     )
   })
-})
-
-app.post('/approve-checkout', authenticate, (req, res) => {
-  const requestIds = req.body.requestIds
-  const admin = req.body.admin
-
-  if (!admin) return res.status(403).send({ msg: 'not authenticated' })
-  console.log(`UPDATE requests SET state='owned' WHERE id IN (${requestIds.join(',')})`)
-  db.query(
-    `UPDATE requests SET state='owned' WHERE id IN (${requestIds.join(',')})`,
-    (err, results) => {
-      if (err) throw err
-      if (results.length > 0) return res.send('Checkout approved')
-      return res.send('Request does not exist')
-    }
-  )
 })
 
 app.post('/return-book', authenticate, (req, res) => {
@@ -224,12 +275,11 @@ app.post('/return-book', authenticate, (req, res) => {
 
       const requestId = results[0].id
 
-      db.query(`DELETE FROM requests WHERE id=${requestId}`, (err, results) => {
+      db.query(`DELETE FROM requests WHERE id=${requestId}`, (err) => {
           if (err) throw err
 
           db.query(
-            `UPDATE books SET quantity = quantity + 1 WHERE id=${bookId}`,
-            (err, results) => {
+            `UPDATE books SET quantity = quantity + 1 WHERE id=${bookId}`, (err) => {
               if (err) throw err
 
               res.send('Book returned')
@@ -240,27 +290,34 @@ app.post('/return-book', authenticate, (req, res) => {
     }
   )
 })
-
-app.post('/deny-checkout', authenticate, (req, res) => {
-  const requestIds = req.body.requestIds
+app.post('/process-checkouts', authenticate, (req, res) => {
+  
   const admin = req.body.admin
+  var checkoutRequests = req.body
+  delete checkoutRequests.admin;
+  delete checkoutRequests.userId;
+  console.log(req.body)
 
-  if (!admin) return res.status(403).send({ msg: 'not authenticated' })
+  if (!admin) {
+    return res.status(403).send({ msg: 'Not authenticated' })
+  }
 
+  for (var requestId of Object.keys(checkoutRequests)) {
 
-  db.query(`DELETE FROM requests WHERE id IN (${requestIds.join(',')})`, (err, results) => {
-      if (err) throw err
+    const action = checkoutRequests[requestId]
 
-      db.query(
-        `UPDATE books SET quantity = quantity + 1 WHERE id IN (SELECT bookId FROM requests WHERE id IN (${requestIds.join(',')}))`,
-        (err, results) => {
-          if (err) throw err
-
-          res.send('Checkout request denied')
-        }
-      )
+    if (action === 'approve') {
+      db.query(`UPDATE requests SET state='owned' WHERE id = ${requestId}`, (err, results) => {
+        if (err) throw err
+      })
+    } else if (action === 'disapprove') {
+      db.query(`DELETE FROM requests WHERE id = ${requestId}`, (err, results) => {
+        if (err) throw err
+      })
     }
-  )
+  }
+
+  res.send('Checkout requests processed successfully')
 })
 
 app.post('/request-admin', authenticate, (req, res) => {
@@ -272,56 +329,54 @@ app.post('/request-admin', authenticate, (req, res) => {
     `UPDATE users SET requested = true WHERE id = ${userId}`,
     (err, results) => {
       if (err) throw err
-      res.send('Admin request submitted')
+      console.log('hii')
+      res.send({...getDataUser(userId, ''), isadminrequested: true})
     }
   )
 })
-
-app.post('/approve-admin', authenticate, (req, res) => {
+app.post('/process-admin-requests', authenticate, (req, res) => {
   const admin = req.body.admin
-  const approvalUserId = req.body.approvalUserId
+  delete req.body.admin;
+  delete req.body.userId;
 
   if (!admin) return res.status(403).send({ msg: 'not authenticated' })
 
-  db.query(
-    `SELECT * FROM users WHERE id = ${approvalUserId} AND requested = true`, (err, results) => {
-      if (err) throw err
+  for (var userId of Object.keys(req.body)) {
+    const action = req.body[userId]
 
-      if (results.length === 0) return res.status(404).send({ msg: 'request not found' })
-    
+    if (action === 'approve') {
       db.query(
-        `UPDATE users SET admin = true, requested = false WHERE id = ${approvalUserId}`,
-        (err, results) => {
+        `SELECT * FROM users WHERE id = ${userId} AND requested = true`, (err, results) => {
           if (err) throw err
-          res.send('Admin request approved')
+
+          if (results.length === 0) return res.status(404).send({ msg: 'request not found' })
+
+          db.query(
+            `UPDATE users SET admin = true, requested = false WHERE id = ${userId}`,
+            (err, results) => {
+              if (err) throw err
+              console.log(`Admin request ${userId} approved`)
+            }
+          )
+        }
+      )
+    } else {
+      db.query(`SELECT * FROM users WHERE id = ${userId} AND requested = true`, (err, results) => {
+          if (err) throw err
+
+          if (results.length === 0) return res.status(404).send({ msg: 'request not found' })
+
+          db.query(
+            `UPDATE users SET requested = false WHERE id = ${userId}`,(err) => {if (err) throw err}
+          )
         }
       )
     }
-  )
+  }
+
+  res.send('admin requests processed successfully')
 })
 
-app.post('/deny-admin', authenticate, (req, res) => {
-  const denialUserId = req.body.denialUserId
-  const admin = req.body.admin
-
-  if (!admin) return res.status(403).send({ msg: 'not authenticated' })
-
-  db.query(
-    `SELECT * FROM users WHERE id = ${denialUserId} AND requested = true`,
-    (err, results) => {
-      if (err) throw err
-
-      if (results.length === 0) return res.status(404).send({ msg: 'request not found' })
-
-      db.query(
-        `UPDATE users SET requested = false WHERE id = ${denialUserId}`, (err, results) => {
-          if (err) throw err
-          res.send('Admin request denied')
-        }
-      )
-    }
-  )
-})
 
 db.query(`SELECT * FROM users WHERE username = 'admin' AND admin = true`, (err, results) => {
   if (results.length!=0) return
@@ -331,8 +386,7 @@ db.query(`SELECT * FROM users WHERE username = 'admin' AND admin = true`, (err, 
       { json: { username: 'admin', password:'admin'} },
       () => {
         db.query(
-          `UPDATE users SET admin = true WHERE username = \'admin\'`,
-          (err, results) => {
+          `UPDATE users SET admin = true WHERE username = \'admin\'`, (err, results) => {
             if (err) throw err
           }
         )
@@ -342,7 +396,7 @@ db.query(`SELECT * FROM users WHERE username = 'admin' AND admin = true`, (err, 
 
 })
 
-db.query(`SELECT * FROM users WHERE username = \'shree\'`, (err, results) => {
+db.query(`SELECT * FROM users WHERE username = 'shree'`, (err, results) => {
   if (results.length!=0) return
 
   request.post(

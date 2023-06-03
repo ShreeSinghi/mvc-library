@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Home Page</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container text-center justify-content-center">
+    <h1>Welcome, Admin!</h1>
+    <br>
+
+    <h3>Add Book to Library</h3>
+    <form action="/add-book" method="POST">
+      <div class="form-group">
+        <label for="bookName">Name:</label>
+        <input type="text" class="form-control" id="bookName" name="bookName" required>
+      </div>
+      <div class="form-group">
+        <label for="bookQuantity">Quantity:</label>
+        <input type="number" class="form-control" id="bookQuantity" name="bookQuantity" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Add Book</button>
+    </form>
+    <br>
+
+    <h3>Admin Requests</h3>
+    <form action="/process-admin-requests" method="POST">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>User Id</th>
+            <th>Approve</th>
+            <th>Deny</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% users.forEach(function(request) { %>
+          <tr>
+            <td><%= request.id %></td>
+            <td class="text-center justify-content-center">
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="<%= request.id %>" value="approve">
+              </div>
+            </td>
+            <td class="text-center justify-content-center">
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="<%= request.id %>" value="deny">
+              </div>
+            </td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <button type="submit" class="btn btn-primary">Submit</button>
+    </form>
+ 
+    <br>
+    <h3>Book Requests</h3>
+    <form action="/process-checkouts" method="POST">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Book</th>
+            <th>User</th>
+            <th>Approve</th>
+            <th>Disapprove</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% books.forEach(function(request) { %>
+          <tr>
+            <td><%= request.title %></td>
+            <td><%= request.userId %></td>
+            <td class="text-center justify-content-center">
+              <div class="form-check text-center justify-content-center">
+                <input class="form-check-input text-center justify-content-center" type="radio" name="<%= request.id %>" value="approve">
+              </div>
+            </td>
+            <td class="text-center justify-content-center">
+              <div class="form-check text-center justify-content-center">
+                <input class="form-check-input text-center justify-content-center" type="radio" name="<%= request.id %>" value="disapprove">
+              </div>
+            </td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+      <button type="submit" class="btn btn-primary">Submit</button>
+    </form>
+    
+    
+  </div>
+</body>
+</html>

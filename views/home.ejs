@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Home Page</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container text-center justify-content-center">
+    <h1>Welcome to our library!</h1>
+    <br>
+    <div class="row">
+      <% books.forEach(function(book) { if (book.quantity > 0) { %>
+      <div class="col-md-4">
+        <div class="card mb-3">
+          <div class="card-body">
+            <h5 class="card-title"><%= book.title %></h5>
+            <p class="card-text">Quantity: <%= book.quantity %></p>
+          </div>
+        </div>
+      </div>
+      <% }}); %>
+    </div>
+  
+    <br>
+  
+    <form method="POST" action="/request-checkout" id="checkout-form">
+      <div class="form-group">
+        <label for="bookId">Choose a book:</label>
+        <select class="form-control" id="bookId" name="bookId">
+          <% books.forEach(function(book) { if (book.quantity > 0) { %>
+          <option value="<%= book.id %>"><%= book.title %></option>
+          <% }}); %>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Submit Request</button>
+    </form>
+  
+    <br>
+  
+    <h3>Books Owned:</h3>
+    <ul>
+      <% ownedbooks.forEach(function(book) { %>
+      <li><%= book.title %></li>
+      <% }) %>
+    </ul>
+  
+    <% if (ownedbooks.length === 0) { %>
+      <h4>None</h4>
+    <% } %>
+  
+    <form action="/submit-book" method="POST">
+      <div class="form-group">
+        <label for="book">Select a book to return:</label>
+        <select class="form-control" id="book" name="book">
+          <% ownedbooks.forEach(function(book) { %>
+          <option value="<%= book.id %>"><%= book.title %></option>
+          <% }); %>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary">Return Book</button>
+    </form>
+  
+    <% if (isadminrequested) { %>
+      <button id="requestAdminBtn" class="btn btn-outline-secondary" disabled>Requested for admin!</button>
+    <% } else { %>
+      <form action="/request-admin" method="POST">
+        <button id="requestAdminBtn" type="submit" class="btn btn-outline-secondary">Request Admin Access</button>
+      </form>
+    <% } %>
+  </div>
+  
+
+  <div class="modal fade" id="requestModal" tabindex="-1" aria-labelledby="requestModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="requestModalLabel">request status</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p id="requestStatus"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded',  () => {
+
+      const requestForm = document.getElementById('checkout-form');
+      const requestModal = new bootstrap.Modal(document.getElementById('requestModal'));
+      const requestStatus = document.getElementById('requestStatus');
+  
+      requestForm.addEventListener('submit',  (event) => {
+        event.preventDefault();
+  
+        const bookId = document.querySelector('#bookId').value;
+        console.log(bookId)
+  
+        fetch('/request-checkout', {
+          method: 'POST',
+          body: JSON.stringify({ bookId }),
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+          .then(response => response.json())
+          .then(data => {
+            console.log(data.checkoutStatus)
+            requestStatus.textContent = data.checkoutStatus;
+  
+            if (data.checkoutStatus.includes('submitted')) {
+              requestStatus.style.color = 'green';
+            } else {
+              requestStatus.style.color = 'red';
+            }
+  
+            requestModal.show();
+          })
+          .catch(error => {
+            console.error('Error:', error);
+          });
+      });
+    });
+
+    const requestAdminBtn = document.getElementById('requestAdminBtn');
+
+  requestAdminBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+
+    fetch('/request-admin', {
+      method: 'POST'
+    })
+    .then(response => {})
+    .then(data => {
+      requestAdminBtn.disabled = true;
+      requestAdminBtn.innerText="Requested for admin!"
+    })
+    .catch(error => {
+      console.error('Error:', error)
+    })
+  })
+
+  </script>  
+  
+</body>
+</html>
