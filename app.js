@@ -49,15 +49,18 @@ async function matchKaro(password, salt, oldhash) {
 
 function authenticate(req,res,next) {
   const cookie = req.headers.cookie
+  if (!cookie)  res.status(403).send({ 'msg': 'not authenticated'})
+
   const sessionId = cookie.slice(cookie.indexOf("sessionID=") + 10)
   if (req.headers.cookie.includes("sessionID")){
     db.query(
-      `SELECT cookies.userId, cookies.sessionId, users.admin FROM cookies, users WHERE sessionId=${db.escape(sessionId)} AND users.id=cookies.userid`, (err,result) =>{
+      `SELECT cookies.userId, cookies.sessionId, users.admin, users.username FROM cookies, users WHERE sessionId=${db.escape(sessionId)} AND users.id=cookies.userid`, (err,result) =>{
         if (err) throw err
-        req.body.admin = result[0].admin
-
-        if (sessionId===result[0].sessionId){
+        console.log(result)
+        if (result.length && sessionId===result[0].sessionId){
+          req.body.admin = result[0].admin
           req.body.userId = result[0].userId
+          console.log(result[0].username, result[0].admin)
           next()
         } else {
             console.log("cookie: ", sessionId)
@@ -77,21 +80,21 @@ function getDataUser(userId, checkoutStatus){
     db.query('SELECT * FROM books', (err, booksresult) => {
       if (err) throw err
   
-      db.query(`SELECT * FROM requests WHERE userId=${userId}`, (err, requestsresult) => {
+      db.query(`SELECT * FROM requests WHERE userId=${db.escape(userId)}`, (err, requestsresult) => {
         if (err) throw err
   
-        db.query(`SELECT * FROM users WHERE id=${userId}`, (err, userresult) => {
+        db.query(`SELECT * FROM users WHERE id=${db.escape(userId)}`, (err, userresult) => {
           if (err) throw err
           ownedbooks = []
-          booksresult.forEach(book => {
-            if (book.userId == userId){
-              ownedbooks.push()
+          requestsresult.forEach(request => {
+            if (request.state=='owned'){
+              ownedbooks.push(booksresult.find(book => book.id === request.bookId))
             }
           })
+          
           resolve({
             books: booksresult,
             isadminrequested: userresult[0].requested,
-            requests: requestsresult,
             ownedbooks: ownedbooks,
             checkoutStatus: checkoutStatus
           })
@@ -143,11 +146,11 @@ app.get('/login', (req, res) => {
 
 app.get('/home', authenticate, async (req, res) => {
   const userId = req.body.userId
-  res.render('home', await getDataUser(userId, ''))
-})
-
-app.get('/home-admin', authenticate, async (req, res) => {
-  res.render('home-admin', await getDataAdmin())
+  if (req.body.admin){
+    res.render('home-admin', await getDataAdmin())
+  } else {
+    res.render('home', await getDataUser(userId, ''))
+  }
 })
 
 app.post('/register', async (req, res) => {
@@ -168,7 +171,7 @@ app.post('/register', async (req, res) => {
       db.query(`SELECT id from users WHERE username=${db.escape(username)}`, (err, result) => {
         if (err) return console.error('error during user registration:', err)
         userId = result[0].id
-        db.query(`INSERT INTO cookies (userId) VALUES (${userId})`, (err, result) => {
+        db.query(`INSERT INTO cookies (userId) VALUES (${db.escape(userId)})`, (err, result) => {
           if (err) return console.error('error during user registration:', err)
   
           console.log('user registered successfully')
@@ -210,21 +213,24 @@ app.post('/login', (req, res) => {
 
 app.post('/add-book', authenticate, (req, res) => {
   const title = req.body.title
-  const quantity = req.body.quantity
-  console.log('hi')
+  const quantity = Number(req.body.quantity)
+  console.log(req.body)
 
   db.query(`SELECT * FROM books WHERE title = ${db.escape(title)}`, (err, results) => {
     if (err) throw err
 
     if (results.length === 0) {
-      db.query(`INSERT INTO books (title, quantity) VALUES (${db.escape(title)}, ${quantity})`, (err, result) => {
+      db.query(`INSERT INTO books (title, quantity) VALUES (${db.escape(title)}, ${db.escape(quantity)})`, (err, result) => {
         if (err) throw err
+        res.redirect('/home')
+
       })
     } else {
       db.query(`UPDATE books SET quantity = ${results[0].quantity + quantity} WHERE title = ${db.escape(title)}`, (err, result) => {
         if (err) throw err
+        res.redirect('/home')
       })
-      res.send('Books added')
+      
     }
   })
 })
@@ -235,8 +241,8 @@ app.post('/request-checkout', authenticate, (req, res) => {
 
   db.query(`SELECT * FROM books WHERE id=${bookId}`, async (err, results) => {
     if (err) throw err
-    if (results.length === 0) res.send(await getDataUser(userId, 'Book does not exist'))
-    if (results[0].quantity === 0) res.send(await getDataUser(userId, 'Book is out of stock'))
+    if (results.length === 0) return res.send(await getDataUser(userId, 'Book does not exist'))
+    if (results[0].quantity === 0) return res.send(await getDataUser(userId, 'Book is out of stock'))
 
     db.query(`SELECT * FROM requests WHERE bookId=${bookId} AND userId=${userId} AND state='requested'`,
       async (err, results) => {
@@ -262,15 +268,15 @@ app.post('/return-book', authenticate, (req, res) => {
   const bookId = req.body.bookId
   const userId = req.body.userId
 
-  db.query(
-    `SELECT * FROM requests WHERE bookId=${bookId} AND userId=${userId} AND state='owned'`,
-    (err, results) => {
+  db.query(`SELECT * FROM requests WHERE bookId=${bookId} AND userId=${userId} AND state='owned'`, (err, results) => {
       if (err) throw err
 
       console.log(results)
 
       if (results.length === 0) {
-        return res.send('Book does not exist or is not owned by the user')
+        console.log('boook does not exist or is not owned by the user')
+        return res.redirect('home')
+
       }
 
       const requestId = results[0].id
@@ -281,8 +287,8 @@ app.post('/return-book', authenticate, (req, res) => {
           db.query(
             `UPDATE books SET quantity = quantity + 1 WHERE id=${bookId}`, (err) => {
               if (err) throw err
-
-              res.send('Book returned')
+              console.log('bbook returned')
+              return res.redirect('home')
             }
           )
         }
@@ -290,12 +296,13 @@ app.post('/return-book', authenticate, (req, res) => {
     }
   )
 })
+
 app.post('/process-checkouts', authenticate, (req, res) => {
   
   const admin = req.body.admin
   var checkoutRequests = req.body
-  delete checkoutRequests.admin;
-  delete checkoutRequests.userId;
+  delete checkoutRequests.admin
+  delete checkoutRequests.userId
   console.log(req.body)
 
   if (!admin) {
@@ -303,21 +310,24 @@ app.post('/process-checkouts', authenticate, (req, res) => {
   }
 
   for (var requestId of Object.keys(checkoutRequests)) {
-
-    const action = checkoutRequests[requestId]
-
-    if (action === 'approve') {
-      db.query(`UPDATE requests SET state='owned' WHERE id = ${requestId}`, (err, results) => {
+    (function (requestId){
+      
+    if (checkoutRequests[requestId] === 'approve') {
+      db.query(`UPDATE requests SET state='owned' WHERE id = ${db.escape(requestId)}`, (err, results) => {
         if (err) throw err
+        console.log(requestId, 'apprived')
       })
-    } else if (action === 'disapprove') {
-      db.query(`DELETE FROM requests WHERE id = ${requestId}`, (err, results) => {
+    } else {
+      db.query(`DELETE FROM requests WHERE id = ${db.escape(requestId)}`, (err, results) => {
         if (err) throw err
+        console.log(requestId, 'denied')
+
       })
     }
+  })(requestId)
   }
 
-  res.send('Checkout requests processed successfully')
+  res.redirect('/home-admin')
 })
 
 app.post('/request-admin', authenticate, (req, res) => {
@@ -325,56 +335,66 @@ app.post('/request-admin', authenticate, (req, res) => {
 
   if (req.body.admin) return res.status(403).send({ msg: 'User is already an admin' })
 
-  db.query(
-    `UPDATE users SET requested = true WHERE id = ${userId}`,
+  db.query(`UPDATE users SET requested = true WHERE id = ${db.escape(userId)}`,
     (err, results) => {
       if (err) throw err
       console.log('hii')
-      res.send({...getDataUser(userId, ''), isadminrequested: true})
+      res.send(getDataUser(userId, ''))
     }
   )
 })
+
 app.post('/process-admin-requests', authenticate, (req, res) => {
   const admin = req.body.admin
-  delete req.body.admin;
-  delete req.body.userId;
+  delete req.body.admin
+  delete req.body.userId
+  console.log(req.body)
 
   if (!admin) return res.status(403).send({ msg: 'not authenticated' })
-
   for (var userId of Object.keys(req.body)) {
-    const action = req.body[userId]
-
-    if (action === 'approve') {
-      db.query(
-        `SELECT * FROM users WHERE id = ${userId} AND requested = true`, (err, results) => {
-          if (err) throw err
-
-          if (results.length === 0) return res.status(404).send({ msg: 'request not found' })
-
-          db.query(
-            `UPDATE users SET admin = true, requested = false WHERE id = ${userId}`,
-            (err, results) => {
-              if (err) throw err
-              console.log(`Admin request ${userId} approved`)
-            }
-          )
-        }
-      )
-    } else {
-      db.query(`SELECT * FROM users WHERE id = ${userId} AND requested = true`, (err, results) => {
-          if (err) throw err
-
-          if (results.length === 0) return res.status(404).send({ msg: 'request not found' })
-
-          db.query(
-            `UPDATE users SET requested = false WHERE id = ${userId}`,(err) => {if (err) throw err}
-          )
-        }
-      )
-    }
+    (function (userId) {
+      var action = req.body[userId]
+      if (action == 'approve') {
+        console.log('hello', userId, action)
+        db.query(
+          `SELECT * FROM users WHERE id = ${db.escape(userId)} AND requested = true`,
+          (err, results) => {
+            if (err) throw err
+            console.log('chal nahi raha code', userId, action)
+  
+            if (results.length === 0) return res.status(404).send({ msg: 'request not found' })
+  
+            db.query(
+              `UPDATE users SET admin = true, requested = false WHERE id = ${db.escape(userId)}`,
+              (err, results) => {
+                if (err) throw err
+                console.log('andar aa gaye', userId, action)
+              }
+            )
+          }
+        )
+      } else {
+        db.query(`SELECT * FROM users WHERE id = ${db.escape(userId)} AND requested = true`,
+          (err, results) => {
+            if (err) throw err
+  
+            if (results.length === 0) return res.status(404).send({ msg: 'request not found' })
+  
+            db.query(
+              `UPDATE users SET requested = false WHERE id = ${db.escape(userId)}`,
+              (err) => {
+                if (err) throw err
+                console.log(`Admin request ${db.escape(userId)} denied`)
+              }
+            )
+          }
+        )
+      }
+    })(userId)
   }
+  
 
-  res.send('admin requests processed successfully')
+  res.redirect('/home-admin')
 })
 
 

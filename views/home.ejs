@@ -26,7 +26,7 @@
     <form method="POST" action="/request-checkout" id="checkout-form">
       <div class="form-group">
         <label for="bookId">Choose a book:</label>
-        <select class="form-control" id="bookId" name="bookId">
+        <select class="form-control" id="requestBook" name="bookId">
           <% books.forEach(function(book) { if (book.quantity > 0) { %>
           <option value="<%= book.id %>"><%= book.title %></option>
           <% }}); %>
@@ -46,12 +46,12 @@
   
     <% if (ownedbooks.length === 0) { %>
       <h4>None</h4>
-    <% } %>
-  
-    <form action="/submit-book" method="POST">
+    <% } else {%>
+      
+    <form action="/return-book" method="POST">
       <div class="form-group">
         <label for="book">Select a book to return:</label>
-        <select class="form-control" id="book" name="book">
+        <select class="form-control" id="returnBook" name="bookId">
           <% ownedbooks.forEach(function(book) { %>
           <option value="<%= book.id %>"><%= book.title %></option>
           <% }); %>
@@ -59,8 +59,10 @@
       </div>
       <button type="submit" class="btn btn-primary">Return Book</button>
     </form>
+    <% } %>
+
   
-    <% if (isadminrequested) { %>
+    <% console.log(isadminrequested); if (isadminrequested) {%>
       <button id="requestAdminBtn" class="btn btn-outline-secondary" disabled>Requested for admin!</button>
     <% } else { %>
       <form action="/request-admin" method="POST">
@@ -81,7 +83,7 @@
           <p id="requestStatus"></p>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="closeModalBtn">Close</button>
         </div>
       </div>
     </div>
@@ -99,7 +101,7 @@
       requestForm.addEventListener('submit',  (event) => {
         event.preventDefault();
   
-        const bookId = document.querySelector('#bookId').value;
+        const bookId = document.getElementById('requestBook').value;
         console.log(bookId)
   
         fetch('/request-checkout', {
@@ -134,17 +136,43 @@
     event.preventDefault();
 
     fetch('/request-admin', {
-      method: 'POST'
+      method: 'POST',
     })
     .then(response => {})
     .then(data => {
-      requestAdminBtn.disabled = true;
-      requestAdminBtn.innerText="Requested for admin!"
+      location.reload()
     })
     .catch(error => {
       console.error('Error:', error)
     })
   })
+
+  const returnBtn = document.getElementById('returnBtn');
+  
+
+  returnBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    const bookId = document.getElementById('returnBook').value;
+    console.log(bookId)
+
+    fetch('/return-book', {
+      method: 'POST',
+      body: JSON.stringify({ bookId }),
+    })
+    .then(response => {})
+    .then(data => {
+      location.reload()
+    })
+    .catch(error => {
+      console.error('Error:', error)
+    })
+  })
+
+  const closeModalBtn = document.getElementById('closeModalBtn');
+
+    closeModalBtn.addEventListener('click', () => {
+      location.reload();
+    });
 
   </script>  
   

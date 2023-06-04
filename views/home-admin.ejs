@@ -12,19 +12,19 @@
     <h3>Add Book to Library</h3>
     <form action="/add-book" method="POST">
       <div class="form-group">
-        <label for="bookName">Name:</label>
-        <input type="text" class="form-control" id="bookName" name="bookName" required>
+        <label for="title">Name:</label>
+        <input type="text" class="form-control" id="title" name="title" required>
       </div>
       <div class="form-group">
-        <label for="bookQuantity">Quantity:</label>
-        <input type="number" class="form-control" id="bookQuantity" name="bookQuantity" required>
+        <label for="quantity">Quantity:</label>
+        <input type="number" class="form-control" id="quantity" name="quantity" required>
       </div>
       <button type="submit" class="btn btn-primary">Add Book</button>
     </form>
     <br>
 
     <h3>Admin Requests</h3>
-    <form action="/process-admin-requests" method="POST">
+    <form action="/process-admin-requests" method="POST" id="admin-requests-form">
       <table class="table">
         <thead>
           <tr>
@@ -56,7 +56,7 @@
  
     <br>
     <h3>Book Requests</h3>
-    <form action="/process-checkouts" method="POST">
+    <form action="/process-checkouts" method="POST" id="book-requests-form">
       <table class="table">
         <thead>
           <tr>
@@ -87,8 +87,46 @@
       </table>
       <button type="submit" class="btn btn-primary">Submit</button>
     </form>
-    
-    
   </div>
+
+  <script>
+    document.getElementById('admin-requests-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const data = new URLSearchParams();
+      for (const pair of new FormData(event.target)) {
+          data.append(pair[0], pair[1]);
+      }  
+
+      fetch('/process-admin-requests', {
+        method: 'POST',
+        body: data
+      })
+      .then(response => response.text())
+      .then(() => {
+        location.reload()
+      })
+      .catch(error => console.error('Error:', error));
+    });
+
+    document.getElementById('book-requests-form').addEventListener('submit', (event) => {
+      event.preventDefault(); 
+
+      const data = new URLSearchParams();
+      for (const pair of new FormData(event.target)) {
+          data.append(pair[0], pair[1]);
+      }
+
+      fetch('/process-checkouts', {
+        method: 'POST',
+        body: data
+      })
+      .then(response => response.text())
+      .then(() => {
+        location.reload()
+      })
+      .catch(error => console.error('Error:', error));
+  });
+
+  </script>
 </body>
 </html>
