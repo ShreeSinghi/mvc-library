@@ -4,37 +4,65 @@ const { authenticate, getDataAdmin,  getDataUser} = require('../middleware');
 const db = require("../database");
 
   
-router.post('/process-checkouts', authenticate, (req, res) => {
+router.post('/process-checks', authenticate, (req, res) => {
   
     const admin = req.body.admin
-    var checkoutRequests = req.body
-    delete checkoutRequests.admin
-    delete checkoutRequests.userId
-    console.log(req.body)
+    var checkRequests = req.body
+    delete checkRequests.admin
+    delete checkRequests.userId
   
     if (!admin) {
       return res.status(403).send({ msg: 'Not authenticated' })
     }
   
-    for (var requestId of Object.keys(checkoutRequests)) {
+    for (var requestId of Object.keys(checkRequests)) {
       (function (requestId){
+      db.query(`SELECT * from requests where id=${db.escape(requestId)}`, (err, results) => {
         
-      if (checkoutRequests[requestId] === 'approve') {
-        db.query(`UPDATE requests SET state='owned' WHERE id = ${db.escape(requestId)}`, (err, results) => {
-          if (err) throw err
-          console.log(requestId, 'apprived')
-        })
-      } else {
-        db.query(`DELETE FROM requests WHERE id = ${db.escape(requestId)}`, (err, results) => {
-          if (err) throw err
-          console.log(requestId, 'denied')
+
+        if (results[0].state == 'inrequested'){
+          if (checkRequests[requestId] === 'approve') {
+            db.query(`UPDATE books SET quantity = quantity + 1 WHERE id=${results[0].bookId}`, (err) => {
+                if (err) throw err
+                db.query(`DELETE FROM requests WHERE id = ${db.escape(requestId)}`, (err, results) => {
+                  if (err) throw err
+                  console.log('returned')
+          
+                })
+              })
+          } else {
+            console.log(results)
+            db.query(`UPDATE requests SET state='owned' WHERE id = ${db.escape(requestId)}`, (err, results) => {
+              if (err) throw err
+            })
   
-        })
-      }
+          }
+        } else {
+          if (checkRequests[requestId] === 'approve') {
+            db.query(`UPDATE requests SET state='owned' WHERE id = ${db.escape(requestId)}`, (err, results) => {
+              if (err) throw err
+              console.log(requestId, 'apprived')
+            })
+          } else {
+            console.log(results)
+            db.query(`UPDATE books SET quantity=quantity+1 WHERE id = ${results[0].bookId}`, (err, results) => {
+              if (err) throw err
+              db.query(`DELETE FROM requests WHERE id = ${db.escape(requestId)}`, (err, results) => {
+                if (err) throw err
+                console.log(requestId, 'denied')
+        
+              })
+            })
+  
+          }
+        }
+
+
+      })
     })(requestId)
     }
   
-    res.redirect('/home-admin')
+    res.redirect('/home')
   })
 
   
@@ -100,8 +128,7 @@ router.post('/process-admin-requests', authenticate, (req, res) => {
     
               if (results.length === 0) return res.status(404).send({ msg: 'request not found' })
     
-              db.query(
-                `UPDATE users SET requested = false WHERE id = ${db.escape(userId)}`,
+              db.query(`UPDATE users SET requested = false WHERE id = ${db.escape(userId)}`,
                 (err) => {
                   if (err) throw err
                   console.log(`Admin request ${db.escape(userId)} denied`)

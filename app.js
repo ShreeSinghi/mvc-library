@@ -57,14 +57,3 @@ db.query(`SELECT * FROM users WHERE username = 'admin' AND admin = true`, (err, 
 
 
 })
-
-db.query(`SELECT * FROM users WHERE username = 'shree'`, (err, results) => {
-  if (results.length!=0) return
-
-  request.post(
-      'http://localhost:3000/register',
-      { json: { username: 'shree', password:'aloo'} },
-      () => {}
-  )
-
-})
