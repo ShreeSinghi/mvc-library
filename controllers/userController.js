@@ -7,24 +7,24 @@ router.post('/request-checkout', authenticate, (req, res) => {
     const bookId = req.body.bookId
     const userId = req.body.userId
   
-    db.query(`SELECT * FROM books WHERE id=${bookId}`, async (err, results) => {
+    db.query(`SELECT * FROM books WHERE id=${db.escape(bookId)}`, async (err, results) => {
       if (err) throw err
       if (results.length === 0) return res.send(await getDataUser(userId, 'Book does not exist'))
       if (results[0].quantity === 0) return res.send(await getDataUser(userId, 'Book is out of stock'))
   
-      db.query(`SELECT * FROM requests WHERE bookId=${bookId} AND userId=${userId} AND state='outrequested'`,
+      db.query(`SELECT * FROM requests WHERE bookId=${db.escape(bookId)} AND userId=${userId} AND state='outrequested'`,
         async (err, results) => {
           if (err) throw err
           if (results.length > 0) return res.send(await getDataUser(userId, 'You have already requested this book'))
   
-          db.query(`INSERT INTO requests (bookId, userId, state) VALUES (${bookId}, ${userId}, 'outrequested')`,
+          db.query(`INSERT INTO requests (bookId, userId, state) VALUES (${db.escape(bookId)}, ${userId}, 'outrequested')`,
           async (err, results) => {
               if (err) throw err
               res.send(await getDataUser(userId, 'Checkout request submitted'))
             }
           )
   
-          db.query(`UPDATE books SET quantity = quantity - 1 WHERE id = ${bookId}`, (err, results) => {
+          db.query(`UPDATE books SET quantity = quantity - 1 WHERE id = ${db.escape(bookId)}`, (err, results) => {
             if (err) throw err
           })
         }
@@ -36,7 +36,7 @@ router.post('/request-checkout', authenticate, (req, res) => {
     const bookId = req.body.bookId
     const userId = req.body.userId
   
-    db.query(`SELECT * FROM requests WHERE bookId=${bookId} AND userId=${userId} AND state='owned'`, (err, results) => {
+    db.query(`SELECT * FROM requests WHERE bookId=${db.escape(bookId)} AND userId=${userId} AND state='owned'`, (err, results) => {
         if (err) throw err
   
         console.log(results)

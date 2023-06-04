@@ -21,6 +21,9 @@ router.post('/register', async (req, res) => {
     const password = req.body.password
     var userId
     var [hash, salt] = await hashKaro(password)
+    if (username.length==0 || password.length==0){
+      res.status(403).send({ msg: 'empty string' })
+    }
   
     db.query(`SELECT * FROM users WHERE username = ${db.escape(username)}`, (err, result) => {
         if (result.length!=0) return res.render('register', {error: 'user already exists'})

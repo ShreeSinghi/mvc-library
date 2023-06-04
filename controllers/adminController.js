@@ -70,6 +70,8 @@ router.post('/process-checks', authenticate, (req, res) => {
 router.post('/add-book', authenticate, (req, res) => {
     const title = req.body.title
     const quantity = Number(req.body.quantity)
+    if (quantity<0 || title.length==0) { return res.status(401).send({ msg: 'No negative values or empty string allowed' }) }
+
     console.log(req.body)
   
     db.query(`SELECT * FROM books WHERE title = ${db.escape(title)}`, (err, results) => {

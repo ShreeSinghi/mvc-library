@@ -6,8 +6,7 @@ exports.authenticate = (req,res,next) => {
   
     const sessionId = cookie.slice(cookie.indexOf("sessionID=") + 10)
     if (req.headers.cookie.includes("sessionID")){
-      db.query(
-        `SELECT cookies.userId, cookies.sessionId, users.admin, users.username FROM cookies, users WHERE sessionId=${db.escape(sessionId)} AND users.id=cookies.userid`, (err,result) =>{
+      db.query(`SELECT cookies.userId, cookies.sessionId, users.admin, users.username FROM cookies, users WHERE sessionId=${db.escape(sessionId)} AND users.id=cookies.userid`, (err,result) =>{
           if (err) throw err
           if (result.length && sessionId===result[0].sessionId){
             req.body.admin = result[0].admin
