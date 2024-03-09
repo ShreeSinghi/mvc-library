@@ -1,7 +1,4 @@
 ﻿
-
-# GIT Exercise
-
 ## Setup
 - Run `git clone https://github.com/ShreeSinghi/backend-assignment` and `cd backend-assignment` on your shell
 - Then run `npm install` 
